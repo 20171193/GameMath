@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using Unity.VisualScripting;
+using UnityEditor.Experimental.GraphView;
 using UnityEngine;
 using static UnityEditor.PlayerSettings;
 
@@ -14,6 +15,9 @@ public class Agent : MonoBehaviour
     [Range(0f, 360f)]
     [SerializeField]
     private float _detectAngle;
+    [Range(0f, 90f)]
+    [SerializeField]
+    private float _forwardAngleThreshold;    // 정면 판단 임계치
     [SerializeField]
     private float _detectRange;
     [SerializeField]
@@ -78,7 +82,10 @@ public class Agent : MonoBehaviour
 
     private bool DetectPlayer(Transform playerTr)
     {
-        Vector3 detectNormal = transform.forward;
+        Vector3 forward = transform.forward;
+        Vector3 right = transform.right;
+        Vector3 up = transform.up;
+
         Vector3 toPlayerVec = playerTr.position - transform.position;
         float sqrDistane = toPlayerVec.sqrMagnitude;
         // 거리 확인
@@ -87,13 +94,38 @@ public class Agent : MonoBehaviour
 
         Vector3 toPlayerNormal = toPlayerVec.normalized;
         // 단위 벡터 내적 : dot은 스칼라 값임과 동시에 코사인 값
-        float dot = Vector3.Dot(detectNormal, toPlayerNormal);
+        float dot = Vector3.Dot(forward, toPlayerNormal);
 
         // 아크코사인으로 실제 각도 추출
-        float cosAngle = Mathf.Acos(dot) * Mathf.Rad2Deg;
-
-        if (cosAngle > _detectAngle * 0.5f)
+        float angleToPlayer = Mathf.Acos(dot) * Mathf.Rad2Deg;
+        if (angleToPlayer > _detectAngle * 0.5f)
             return false;
+
+        // 단위 벡터 외적
+        // y축 기준 외적 : Yaw
+        Vector3 crossYaxis = Vector3.Cross(forward, toPlayerNormal);
+        float dotYaxis = Mathf.Clamp(Vector3.Dot(crossYaxis, up), -1f, 1f);
+        // 정면 임계치
+        Debug.Log(Mathf.Acos(dotYaxis) * Mathf.Rad2Deg);
+        if (Mathf.Acos(dotYaxis) * Mathf.Rad2Deg <= _forwardAngleThreshold)
+            dotYaxis = 0;
+
+        // x축 기준 외적 : Pitch
+        Vector3 crossXaxis = Vector3.Cross(right, toPlayerNormal);
+        float dotXaxis = Mathf.Clamp(Vector3.Dot(crossXaxis, right), -1f, 1f);
+        // 정면 임계치
+        if (Mathf.Acos(dotXaxis) * Mathf.Rad2Deg <= _forwardAngleThreshold)
+            dotXaxis = 0;
+
+        if(dotYaxis == 0 /*&& dotXaxis == 0*/)
+            Debug.Log("정면에서 플레이어 탐지");
+        else
+        {
+            string isRight = dotYaxis == 0 ? "" : (dotYaxis < 0 ? "좌측" : "우측");
+            string isUp = dotXaxis == 0 ? "" : (dotXaxis < 0 ? "상단" : "하단");
+
+            Debug.Log($"{isRight}{isUp}에서 플레이어 탐지");
+        }
 
         return true;
     }
